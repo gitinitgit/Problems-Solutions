@@ -1,0 +1,24 @@
+{
+  "name": "dsa-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "develop": "gatsby develop",
+    "start": "gatsby develop",
+    "build": "gatsby build",
+    "serve": "gatsby serve",
+    "clean": "gatsby clean"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.17",
+    "gatsby": "^5.13.0",
+    "highlight.js": "^11.12.0",
+    "isomorphic-dompurify": "^3.19.0",
+    "marked": "^18.1.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "webpack": "^5.112.2"
+  }
+}
