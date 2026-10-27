@@ -6,6 +6,8 @@
     "develop": "gatsby develop",
     "start": "gatsby develop",
     "server": "node server/index.js",
+    "start:server": "node server/index.js",
+    "build:server": "cd server && npm install",
     "build": "gatsby build",
     "serve": "gatsby serve",
     "clean": "gatsby clean"
