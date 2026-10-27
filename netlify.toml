@@ -3,4 +3,6 @@
   publish = "public"
 
 [build.environment]
-  NODE_VERSION = "18.20.4"
+  NODE_VERSION = "20"
+  # JWT_EXPIRE is a short, non-secret duration (e.g. "7d") that matches ordinary text in the build
+  SECRETS_SCAN_OMIT_KEYS = "JWT_EXPIRE"
