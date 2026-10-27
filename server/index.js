@@ -19,6 +19,8 @@ app.use(helmet())
 const allowedOrigins = [
   'http://localhost:8000',
   'http://localhost:9000',
+  "http://localhost:5173",
+  "https://dsclassmate.netlify.app",
   process.env.CLIENT_ORIGIN,
 ].filter(Boolean)
 
