@@ -1,6 +1,7 @@
 export const config = {
   title: 'DSA TRACKER',
   storageKey: 'dsa-tracker-v1',
+  apiUrl: process.env.GATSBY_API_URL || 'http://localhost:5000',
   // [link, label, path prefix that marks it active]
   nav: [
     ['/', 'Dashboard', '/'],

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, navigate } from 'gatsby'
 import Layout from '../components/Layout'
+import ProtectedRoute from '../components/ProtectedRoute'
 import data from '../../content/questions.json'
 import { useTracker } from '../hooks/useTracker'
 import { md, LANGS, langLabel, onCopyClick } from '../components/Markdown'
@@ -14,7 +15,7 @@ const tpl = (l) =>
 
 export default function SolutionPage({ location }) {
   const k = new URLSearchParams(location.search).get('k') || ''
-  const { S, set, ready } = useTracker()
+  const { S, set, ready, saveSolution, syncing } = useTracker()
   const [w, i] = k.split('-')
   const q = data.weeks[w] && data.weeks[w][i]
   const saved = S.solutions[k]
@@ -53,7 +54,7 @@ export default function SolutionPage({ location }) {
   const html = useMemo(() => md(body), [body])
 
   if (!q)
-    return <Layout location={location}><p>Open a problem in the <Link to="/weekly/">Weekly Tracker</Link> and click its document icon.</p></Layout>
+    return <ProtectedRoute><Layout location={location}><p>Open a problem in the <Link to="/weekly/">Weekly Tracker</Link> and click its document icon.</p></Layout></ProtectedRoute>
 
   // ---- resizing: workspace edges/corner + split divider
   const drag = (move) => (e) => {
@@ -116,25 +117,33 @@ export default function SolutionPage({ location }) {
     if (v) { setTitle(v.title); setTags(v.tags); setLang(v.lang); setBody(v.body) }
     e.target.value = ''
   }
-  const post = () => {
+  const post = async () => {
     const sol = { title: title.trim() || q.title, tags, lang, body, date: today() }
     // keep the previous version in the solution's history
     const versions = saved ? [{ title: saved.title, tags: saved.tags, lang: saved.lang, body: saved.body, date: saved.date }, ...(saved.versions || [])].slice(0, 20) : []
-    set('solutions', k, { ...sol, versions: saved && saved.body === body ? saved.versions || [] : versions })
-    set('drafts', k)
+    const solData = { ...sol, versions: saved && saved.body === body ? saved.versions || [] : versions }
+    if (saveSolution) {
+      await saveSolution(k, solData)
+    } else {
+      set('solutions', k, solData)
+      set('drafts', k)
+    }
     navigate('/solutions/')
   }
   const cancel = () => { set('drafts', k); window.history.length > 1 ? navigate(-1) : navigate('/') }
   const wr = lay.write
 
   return (
-    <Layout location={location} wide>
+    <ProtectedRoute><Layout location={location} wide>
       <div className="wsw" ref={ws} style={{ width: `min(100%, ${lay.w}px)`, height: lay.h }}>
         <div className="ws">
           <div className="wsh">
             {wr ? <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter your title" aria-label="Title" />
               : <h2 className="rtitle">{title || q.title}</h2>}
             <span className="sm hide-s">LC {q.n} · {q.title}</span>
+            <span className="cloud-pill" title={syncing ? 'Syncing changes to cloud…' : 'Notes auto-synced to cloud'}>
+              {syncing ? '☁️ Syncing…' : '☁️ Cloud'}
+            </span>
             <button className="dim" onClick={cancel}>{wr ? 'Cancel' : 'Close'}</button>
             <button className="go" onClick={post}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: 5, verticalAlign: '-1px' }}>
@@ -186,6 +195,6 @@ export default function SolutionPage({ location }) {
         <div className="bh" onPointerDown={resize('h')} title="Drag to resize height" />
         <div className="ch" onPointerDown={resize('wh', 'r')} title="Drag to resize" />
       </div>
-    </Layout>
+    </Layout></ProtectedRoute>
   )
 }

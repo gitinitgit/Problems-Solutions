@@ -1,6 +1,7 @@
 import React from 'react'
 import { Link } from 'gatsby'
 import Layout from '../components/Layout'
+import ProtectedRoute from '../components/ProtectedRoute'
 import Bar from '../components/Bar'
 import data from '../../content/questions.json'
 import { useTracker } from '../hooks/useTracker'
@@ -9,7 +10,7 @@ import { topicSlug } from '../utils/slug'
 export default function Concepts({ location }) {
   const { S, tStat, solCount } = useTracker()
   return (
-    <Layout location={location}>
+    <ProtectedRoute><Layout location={location}>
       <h1>Concepts</h1>
       <p className="hint">One module per topic: its problems, your solutions and a revised tick.</p>
       <div className="grid g3">
@@ -24,6 +25,6 @@ export default function Concepts({ location }) {
           )
         })}
       </div>
-    </Layout>
+    </Layout></ProtectedRoute>
   )
 }

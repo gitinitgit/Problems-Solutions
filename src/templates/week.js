@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link } from 'gatsby'
 import Layout from '../components/Layout'
+import ProtectedRoute from '../components/ProtectedRoute'
 import Bar from '../components/Bar'
 import QuestionRow from '../components/QuestionRow'
 import data from '../../content/questions.json'
@@ -40,7 +41,7 @@ export default function WeekTemplate({ pageContext, location }) {
   }
   const tps = [...new Set(qs.map((q) => q.topic))]
   return (
-    <Layout location={location}>
+    <ProtectedRoute><Layout location={location}>
       <h1>Weekly Tracker</h1>
       <div className="chips" style={{ marginTop: 14 }}>
         {data.weeks.map((w, i) => {
@@ -121,6 +122,6 @@ export default function WeekTemplate({ pageContext, location }) {
       <div className="list">
         {rows.length ? rows.map(([i, q], n) => <QuestionRow key={i} k={wi + '-' + i} q={q} i={n} />) : <div className="card hint">Nothing here.</div>}
       </div>
-    </Layout>
+    </Layout></ProtectedRoute>
   )
 }

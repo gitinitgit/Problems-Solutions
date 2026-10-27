@@ -5,6 +5,7 @@
   "scripts": {
     "develop": "gatsby develop",
     "start": "gatsby develop",
+    "server": "node server/index.js",
     "build": "gatsby build",
     "serve": "gatsby serve",
     "clean": "gatsby clean"

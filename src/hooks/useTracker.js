@@ -1,35 +1,136 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react'
 import data from '../../content/questions.json'
 import { config } from '../config'
 import { today } from '../utils'
+import { useAuth } from '../context/AuthContext'
 
 export const total = data.weeks.reduce((s, w) => s + w.length, 0)
 const blank = { done: {}, solutions: {}, drafts: {}, revised: {}, revisions: {}, weekAwarded: {}, sessions: [], start: '', history: [] }
 const Ctx = createContext(null)
 
+const API = typeof window !== 'undefined'
+  ? (process.env.GATSBY_API_URL || 'http://localhost:5000')
+  : ''
+
 export const TrackerProvider = ({ children }) => {
+  const { user, loading: authLoading } = useAuth() || {}
   const [S, setS] = useState(blank)
   const [ready, setReady] = useState(false)
   const [lastK, setLastK] = useState('')
   const [toast, setToast] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState('')
+  const syncTimer = useRef(null)
+  const skipNextSync = useRef(false)
+  const prevUserRef = useRef(null)
 
-  useEffect(() => {
+  // ── Debounced cloud sync — pushes to server 1.5s after last change ──
+  const syncToCloud = useCallback(async (state) => {
     try {
-      const saved = JSON.parse(localStorage.getItem(config.storageKey) || '{}')
-      setS((s) => ({
-        ...s,
-        ...saved,
-        revisions: saved.revisions || {},
-        weekAwarded: saved.weekAwarded || {},
-      }))
-    } catch (e) {}
-    setReady(true)
+      setSyncing(true)
+      setSyncError('')
+      const res = await fetch(`${API}/api/data`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ data: state }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        if (res.status !== 401) {
+          setSyncError(err.error || 'Sync failed')
+        }
+      }
+    } catch (e) {
+      // Silently fail — offline mode
+    } finally {
+      setSyncing(false)
+    }
   }, [])
+
+  // ── Auth & cloud sync lifecycle ──
   useEffect(() => {
-    if (ready) try { localStorage.setItem(config.storageKey, JSON.stringify(S)) } catch (e) {}
+    if (authLoading) return
+
+    ;(async () => {
+      if (user) {
+        // User is logged in — pull from cloud
+        try {
+          const res = await fetch(`${API}/api/data`, { credentials: 'include' })
+          if (res.ok) {
+            const { data: cloudData } = await res.json()
+            if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
+              const merged = {
+                ...blank,
+                ...cloudData,
+                revisions: cloudData.revisions || {},
+                weekAwarded: cloudData.weekAwarded || {},
+              }
+              setS(merged)
+              skipNextSync.current = true
+              try { localStorage.setItem(config.storageKey, JSON.stringify(merged)) } catch (e) {}
+            } else {
+              // Cloud is empty — check if local data has content to migrate
+              let localData = blank
+              try {
+                const saved = JSON.parse(localStorage.getItem(config.storageKey) || '{}')
+                if (saved && Object.keys(saved.done || {}).length > 0 || Object.keys(saved.solutions || {}).length > 0) {
+                  localData = { ...blank, ...saved, revisions: saved.revisions || {}, weekAwarded: saved.weekAwarded || {} }
+                  setS(localData)
+                  // Push local data to cloud for new user
+                  syncToCloud(localData)
+                }
+              } catch (e) {}
+            }
+          }
+        } catch (e) {
+          // Offline mode — load local data
+          try {
+            const saved = JSON.parse(localStorage.getItem(config.storageKey) || '{}')
+            setS({ ...blank, ...saved, revisions: saved?.revisions || {}, weekAwarded: saved?.weekAwarded || {} })
+          } catch (err) {}
+        }
+      } else {
+        // User logged out
+        if (prevUserRef.current) {
+          setS(blank)
+          try { localStorage.removeItem(config.storageKey) } catch (e) {}
+        } else {
+          // Initial unauthenticated visitor
+          try {
+            const saved = JSON.parse(localStorage.getItem(config.storageKey) || '{}')
+            setS({ ...blank, ...saved, revisions: saved?.revisions || {}, weekAwarded: saved?.weekAwarded || {} })
+          } catch (e) {}
+        }
+      }
+
+      prevUserRef.current = user
+      setReady(true)
+    })()
+  }, [user, authLoading, syncToCloud])
+
+  // ── Persist to localStorage on every change ───────────────────
+  useEffect(() => {
+    if (ready) {
+      try { localStorage.setItem(config.storageKey, JSON.stringify(S)) } catch (e) {}
+    }
   }, [S, ready])
 
-  // auto-award revision 1 for any week already 100% completed
+  // ── Debounced auto-sync to cloud on state changes ──
+  useEffect(() => {
+    if (!ready || !user) return
+    if (skipNextSync.current) {
+      skipNextSync.current = false
+      return
+    }
+    if (syncTimer.current) clearTimeout(syncTimer.current)
+    syncTimer.current = setTimeout(() => {
+      syncToCloud(S)
+    }, 1500)
+    return () => { if (syncTimer.current) clearTimeout(syncTimer.current) }
+  }, [S, ready, user, syncToCloud])
+
+  // ── Auto-award revision 1 for any week already 100% completed ──
   useEffect(() => {
     if (!ready) return
     let updated = false
@@ -121,8 +222,54 @@ export const TrackerProvider = ({ children }) => {
     setToast(`Week ${wi + 1} refreshed for repractice! Solutions preserved.`)
   }
 
+  // Save solution & notes with immediate cloud sync
+  const saveSolution = useCallback(async (k, solData) => {
+    let nextState
+    setS((s) => {
+      const nextDrafts = { ...(s.drafts || {}) }
+      delete nextDrafts[k]
+      nextState = {
+        ...s,
+        solutions: { ...(s.solutions || {}), [k]: solData },
+        drafts: nextDrafts,
+      }
+      return nextState
+    })
+    try {
+      if (nextState) localStorage.setItem(config.storageKey, JSON.stringify(nextState))
+    } catch (e) {}
+    setToast('Solution & notes saved to cloud ☁️')
+    if (nextState && user) {
+      await syncToCloud(nextState)
+    }
+  }, [user, syncToCloud])
+
+  // Delete solution and sync to cloud
+  const deleteSolution = useCallback(async (k) => {
+    let nextState
+    setS((s) => {
+      const nextSol = { ...(s.solutions || {}) }
+      delete nextSol[k]
+      nextState = { ...s, solutions: nextSol }
+      return nextState
+    })
+    try {
+      if (nextState) localStorage.setItem(config.storageKey, JSON.stringify(nextState))
+    } catch (e) {}
+    setToast('Solution deleted')
+    if (nextState && user) {
+      await syncToCloud(nextState)
+    }
+  }, [user, syncToCloud])
+
+  // Force sync now (useful after import or reset)
+  const forceSync = useCallback(() => {
+    syncToCloud(S)
+  }, [S, syncToCloud])
+
   const value = {
     S, ready, set, toggleDone, repracticeWeek, lastK, wDone, tStat, solved, curWeek, solCount,
+    syncing, syncError, forceSync, saveSolution, deleteSolution,
     setStart: (start) => setS((s) => ({ ...s, start })),
     addSession: (x) => setS((s) => ({ ...s, sessions: [...s.sessions, x] })),
     importData: (o) => setS((s) => ({ ...s, ...o })),

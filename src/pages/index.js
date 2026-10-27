@@ -1,16 +1,19 @@
 import React, { useRef } from 'react'
 import { Link } from 'gatsby'
 import Layout from '../components/Layout'
+import ProtectedRoute from '../components/ProtectedRoute'
 import Bar from '../components/Bar'
 import CountUp from '../components/CountUp'
 import Timer from '../components/Timer'
 import Heatmap from '../components/Heatmap'
 import data from '../../content/questions.json'
 import { useTracker, total } from '../hooks/useTracker'
+import { useAuth } from '../context/AuthContext'
 import { fmt, streak, today } from '../utils'
 import { topicSlug } from '../utils/slug'
 
 export default function Dashboard({ location }) {
+  const { user, isGuest } = useAuth() || {}
   const { S, wDone, tStat, solved: s, curWeek: cw, setStart, importData, reset, restart } = useTracker()
   const file = useRef()
   const td = Object.values(S.done).filter((d) => d === today()).length
@@ -29,27 +32,58 @@ export default function Dashboard({ location }) {
   }
 
   return (
+    <ProtectedRoute>
     <Layout location={location}>
-      {/* ── Top row: Ring + Stats (LeetCode-style compact) ──────────── */}
-      <div className="dash-top">
-        <div className="dash-ring">
-          <svg viewBox="0 0 120 120">
-            <circle className="ring-bg" cx="60" cy="60" r="46" fill="none" strokeWidth="8" />
-            <circle className="ring-fg" cx="60" cy="60" r="46" fill="none" strokeWidth="8" style={{ '--c': '289.0', '--o': (289.0 * (1 - s / total)).toFixed(1) }} />
-          </svg>
-          <div className="dash-ring-label">
-            <span className="dash-ring-n"><CountUp n={s} /></span>
-            <span className="dash-ring-t">/{total}</span>
-            <span className="dash-ring-sub">Solved</span>
+      {/* ── Top Flight Deck Panoramic Hero ── */}
+      <div className="dash-hero">
+        <div className="dash-hero-viewport">
+          <img
+            src="/dashboard-banner.jpg"
+            alt="Aircraft Carrier Flight Deck with F/A-18 Fighter Jets"
+            className="dash-hero-img"
+          />
+          <div className="dash-hero-top-vignette" />
+          <div className="dash-hero-bottom-fade" />
+
+          <div className="dash-hero-hud">
+            {/* Squadron Bar — Tactical aviation stencil badge */}
+            <div className="dash-squadron-bar">
+              <span className="squadron-icon">✈</span>
+              <span className="squadron-text">TOP GUN SQUADRON</span>
+              <span className="squadron-sub">VF-1 FLIGHT DECK</span>
+            </div>
+
+            {/* Callsign Bar — Distinct pilot flight-plaque typography */}
+            <div className="dash-callsign-bar">
+              <span className="callsign-label">CALLSIGN</span>
+              <span className="callsign-name">{user?.name || (isGuest ? 'GUEST PILOT' : 'MAVERICK')}</span>
+            </div>
           </div>
         </div>
-        <div className="dash-stats">
-          <div className="ds"><b>{pc}%</b><span>complete</span></div>
-          <div className="ds"><b>{wDone(cw)}/{data.weeks[cw].length}</b><span>week {cw + 1}</span></div>
-          <div className="ds"><b><CountUp n={td} /></b><span>today</span></div>
-          <div className="ds"><b><CountUp n={streak(S.done)} /></b><span>streak</span></div>
-          <div className="ds"><b>{fmt(mins)}</b><span>studied</span></div>
-          <div className="ds"><b>{Object.keys(S.solutions).length}</b><span>solutions</span></div>
+
+        {/* ── Mission Console: Ring + Stats placed cleanly below so planes remain fully visible ── */}
+        <div className="dash-hero-console">
+          <div className="dash-top">
+            <div className="dash-ring">
+              <svg viewBox="0 0 120 120">
+                <circle className="ring-bg" cx="60" cy="60" r="46" fill="none" strokeWidth="8" />
+                <circle className="ring-fg" cx="60" cy="60" r="46" fill="none" strokeWidth="8" style={{ '--c': '289.0', '--o': (289.0 * (1 - s / total)).toFixed(1) }} />
+              </svg>
+              <div className="dash-ring-label">
+                <span className="dash-ring-n"><CountUp n={s} /></span>
+                <span className="dash-ring-t">/{total}</span>
+                <span className="dash-ring-sub">Solved</span>
+              </div>
+            </div>
+            <div className="dash-stats">
+              <div className="ds"><b>{pc}%</b><span>complete</span></div>
+              <div className="ds"><b>{wDone(cw)}/{data.weeks[cw].length}</b><span>week {cw + 1}</span></div>
+              <div className="ds"><b><CountUp n={td} /></b><span>today</span></div>
+              <div className="ds"><b><CountUp n={streak(S.done)} /></b><span>streak</span></div>
+              <div className="ds"><b>{fmt(mins)}</b><span>studied</span></div>
+              <div className="ds"><b>{Object.keys(S.solutions).length}</b><span>solutions</span></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -150,5 +184,6 @@ export default function Dashboard({ location }) {
         </div>
       </div>
     </Layout>
+    </ProtectedRoute>
   )
 }
