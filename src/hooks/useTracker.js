@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react'
 import data from '../../content/questions.json'
-import { config } from '../config'
+import { config, getApiUrl, getAuthHeaders } from '../config'
 import { today } from '../utils'
 import { useAuth } from '../context/AuthContext'
 
@@ -8,9 +8,7 @@ export const total = data.weeks.reduce((s, w) => s + w.length, 0)
 const blank = { done: {}, solutions: {}, drafts: {}, revised: {}, revisions: {}, weekAwarded: {}, sessions: [], start: '', history: [] }
 const Ctx = createContext(null)
 
-const API = typeof window !== 'undefined'
-  ? (process.env.GATSBY_API_URL || 'http://localhost:5000')
-  : ''
+const API = getApiUrl()
 
 export const TrackerProvider = ({ children }) => {
   const { user, loading: authLoading } = useAuth() || {}
@@ -31,7 +29,7 @@ export const TrackerProvider = ({ children }) => {
       setSyncError('')
       const res = await fetch(`${API}/api/data`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         credentials: 'include',
         body: JSON.stringify({ data: state }),
       })
@@ -56,7 +54,10 @@ export const TrackerProvider = ({ children }) => {
       if (user) {
         // User is logged in — pull from cloud
         try {
-          const res = await fetch(`${API}/api/data`, { credentials: 'include' })
+          const res = await fetch(`${API}/api/data`, {
+            credentials: 'include',
+            headers: getAuthHeaders(),
+          })
           if (res.ok) {
             const { data: cloudData } = await res.json()
             if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {

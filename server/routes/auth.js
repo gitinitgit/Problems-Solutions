@@ -4,22 +4,26 @@ const User = require('../models/User')
 
 const router = express.Router()
 
-// Helper: set JWT as httpOnly cookie
+// Helper: set JWT as httpOnly cookie and return user + token
 const sendTokenCookie = (res, user) => {
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d',
   })
 
+  const isProd = process.env.NODE_ENV === 'production'
   const cookieOpts = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax', // 'none' required for cross-domain Netlify <-> API cookies
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   }
 
   res.cookie('token', token, cookieOpts)
-  return { id: user._id, name: user.name, email: user.email }
+  return {
+    user: { id: user._id, name: user.name, email: user.email },
+    token,
+  }
 }
 
 // POST /api/auth/register
@@ -53,8 +57,8 @@ router.post('/register', async (req, res) => {
       password,
     })
 
-    const userData = sendTokenCookie(res, user)
-    res.status(201).json({ user: userData })
+    const { user: userData, token } = sendTokenCookie(res, user)
+    res.status(201).json({ user: userData, token })
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({ error: 'An account with this email already exists' })
@@ -84,8 +88,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' })
     }
 
-    const userData = sendTokenCookie(res, user)
-    res.json({ user: userData })
+    const { user: userData, token } = sendTokenCookie(res, user)
+    res.json({ user: userData, token })
   } catch (err) {
     console.error('Login error:', err)
     res.status(500).json({ error: 'Server error. Please try again.' })
@@ -94,10 +98,11 @@ router.post('/login', async (req, res) => {
 
 // POST /api/auth/logout
 router.post('/logout', (req, res) => {
+  const isProd = process.env.NODE_ENV === 'production'
   res.cookie('token', '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     expires: new Date(0),
     path: '/',
   })
@@ -107,7 +112,11 @@ router.post('/logout', (req, res) => {
 // GET /api/auth/me — check current session
 router.get('/me', async (req, res) => {
   try {
-    const token = req.cookies?.token
+    let token = req.cookies?.token
+    if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1]
+    }
+
     if (!token) {
       return res.status(401).json({ error: 'Not authenticated' })
     }

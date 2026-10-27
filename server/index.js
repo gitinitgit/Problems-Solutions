@@ -12,28 +12,45 @@ const dataRoutes = require('./routes/data')
 const app = express()
 const PORT = process.env.PORT || 5000
 
+// Reverse proxy trust (Render, Railway, Heroku, etc.)
+app.set('trust proxy', 1)
+
 // Security headers
 app.use(helmet())
 
-// CORS — allow Gatsby dev server and production origin
+// CORS — allow Gatsby dev server and production origins
 const allowedOrigins = [
   'http://localhost:8000',
   'http://localhost:9000',
-  "http://localhost:5173",
-  "https://dsclassmate.netlify.app",
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://dsclassmate.netlify.app',
   process.env.CLIENT_ORIGIN,
 ].filter(Boolean)
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      // Allow requests with no origin (mobile apps, curl, etc.)
-      if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
-      cb(new Error('CORS not allowed'))
-    },
-    credentials: true,
-  })
-)
+const isOriginAllowed = (origin) => {
+  if (!origin) return true
+  if (allowedOrigins.includes(origin)) return true
+  // Allow all Netlify deployments and deploy previews
+  if (/\.netlify\.app$/.test(origin)) return true
+  return false
+}
+
+const corsOptions = {
+  origin: (origin, cb) => {
+    if (isOriginAllowed(origin)) {
+      return cb(null, true)
+    }
+    // Return cb(null, false) so preflight doesn't throw a 500
+    cb(null, false)
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}
+
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 
 // Body parsing
 app.use(express.json({ limit: '2mb' })) // tracker data can be large

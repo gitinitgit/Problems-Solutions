@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { navigate } from 'gatsby'
+import { getApiUrl, getAuthHeaders } from '../config'
 
-const API = process.env.GATSBY_API_URL || 'http://localhost:5000'
+const API = getApiUrl()
 const AuthCtx = createContext(null)
 
 export const AuthProvider = ({ children }) => {
@@ -25,7 +26,10 @@ export const AuthProvider = ({ children }) => {
         if (guestSaved) {
           setIsGuest(true)
         }
-        const res = await fetch(`${API}/api/auth/me`, { credentials: 'include' })
+        const res = await fetch(`${API}/api/auth/me`, {
+          credentials: 'include',
+          headers: getAuthHeaders(),
+        })
         if (res.ok) {
           const { user: u } = await res.json()
           setUser(u)
@@ -52,7 +56,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await fetch(`${API}/api/auth/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         credentials: 'include',
         body: JSON.stringify({ name, email, password }),
       })
@@ -61,12 +65,17 @@ export const AuthProvider = ({ children }) => {
         setError(data.error || 'Registration failed')
         return false
       }
-      try { localStorage.removeItem('dsa-guest-mode') } catch (e) {}
+      try {
+        localStorage.removeItem('dsa-guest-mode')
+        if (data.token) {
+          localStorage.setItem('dsa_token', data.token)
+        }
+      } catch (e) {}
       setIsGuest(false)
       setUser(data.user)
       return true
     } catch (e) {
-      setError('Network error. Please check your connection.')
+      setError('Network error. Please verify server connection.')
       return false
     }
   }, [])
@@ -76,7 +85,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await fetch(`${API}/api/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         credentials: 'include',
         body: JSON.stringify({ email, password }),
       })
@@ -85,12 +94,17 @@ export const AuthProvider = ({ children }) => {
         setError(data.error || 'Login failed')
         return false
       }
-      try { localStorage.removeItem('dsa-guest-mode') } catch (e) {}
+      try {
+        localStorage.removeItem('dsa-guest-mode')
+        if (data.token) {
+          localStorage.setItem('dsa_token', data.token)
+        }
+      } catch (e) {}
       setIsGuest(false)
       setUser(data.user)
       return true
     } catch (e) {
-      setError('Network error. Please check your connection.')
+      setError('Network error. Please verify server connection.')
       return false
     }
   }, [])
@@ -99,6 +113,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await fetch(`${API}/api/auth/logout`, {
         method: 'POST',
+        headers: getAuthHeaders(),
         credentials: 'include',
       })
     } catch (e) {
@@ -106,7 +121,10 @@ export const AuthProvider = ({ children }) => {
     }
     setUser(null)
     setIsGuest(false)
-    try { localStorage.removeItem('dsa-guest-mode') } catch (e) {}
+    try {
+      localStorage.removeItem('dsa-guest-mode')
+      localStorage.removeItem('dsa_token')
+    } catch (e) {}
     navigate('/landing/')
   }, [])
 
